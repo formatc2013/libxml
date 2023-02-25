@@ -23,6 +23,7 @@ Checks:
   bugprone-*,
   google-*,
   misc-*,
+  -misc-definitions-in-headers,
   modernize-*,
   -modernize-use-trailing-return-type,
   performance-*,

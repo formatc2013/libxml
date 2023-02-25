@@ -1,32 +1,33 @@
 /**
  * section: 	XPath
- * synopsis: 	Evaluate XPath expression and prints result node set.
- * purpose: 	Shows how to evaluate XPath expression and register
- *          	known namespaces in XPath context.
- * usage:	xpath1 <xml-file> <xpath-expr> [<known-ns-list>]
- * test:	xpath1 test3.xml '//child2' > xpath1.tmp && diff xpath1.tmp
- * $(srcdir)/xpath1.res author: 	Aleksey Sanin
- * copy: 	see Copyright for the status of this software.
+ * synopsis: 	Load a document, locate subelements with XPath, modify
+ *              said elements and save the resulting document.
+ * purpose: 	Shows how to make a full round-trip from a load/edit/save
+ * usage:	xpath2 <xml-file> <xpath-expr> <new-value>
+ * test:	xpath2 test3.xml '//discarded' discarded > xpath2.tmp && diff
+ * xpath2.tmp $(srcdir)/xpath2.res author: 	Aleksey Sanin and Daniel
+ * Veillard copy: 	see Copyright for the status of this software.
  */
+#include "libxml/xmlstring.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
 
-#if defined(LIBXML_XPATH_ENABLED) && defined(LIBXML_SAX1_ENABLED)
+#if defined(LIBXML_XPATH_ENABLED) && defined(LIBXML_SAX1_ENABLED) &&           \
+    defined(LIBXML_OUTPUT_ENABLED)
 
 static void usage(const char *name);
-int execute_xpath_expression(const char *filename, const xmlChar *xpathExpr,
-                             const xmlChar *nsList);
-int register_namespaces(xmlXPathContextPtr xpathCtx, const xmlChar *nsList);
-void print_xpath_nodes(xmlNodeSetPtr nodes, FILE *output);
-
-int main_xpath(int argc, char **argv) {
+static int example4(const char *filename, const xmlChar *xpathExpr);
+static void update_xpath_nodes(xmlNodeSetPtr nodes, const xmlChar *value);
+auto print(auto m) { std::cout << m << std::endl; }
+int main_xpath(auto filename, auto expr) {
   /* Parse command line and process file */
 
   /* Init libxml */
@@ -34,9 +35,8 @@ int main_xpath(int argc, char **argv) {
   LIBXML_TEST_VERSION
 
   /* Do the main job */
-  if (execute_xpath_expression(argv[1], BAD_CAST argv[2],
-                               (argc > 3) ? BAD_CAST argv[3] : nullptr) < 0) {
-    usage(argv[0]);
+  if (example4(filename, (const xmlChar *)expr)) {
+    usage(" ");
     return (-1);
   }
 
@@ -59,31 +59,28 @@ int main_xpath(int argc, char **argv) {
 static void usage(const char *name) {
   assert(name);
 
-  fprintf(stderr, "Usage: %s <xml-file> <xpath-expr> [<known-ns-list>]\n",
-          name);
-  fprintf(stderr, "where <known-ns-list> is a list of known namespaces\n");
-  fprintf(stderr, "in \"<prefix1>=<href1> <prefix2>=href2> ...\" format\n");
+  fprintf(stderr, "Usage: %s <xml-file> <xpath-expr> <value>\n", name);
 }
 
 /**
- * execute_xpath_expression:
+ * example4:
  * @filename:		the input XML filename.
  * @xpathExpr:		the xpath expression for evaluation.
- * @nsList:		the optional list of known namespaces in
- *			"<prefix1>=<href1> <prefix2>=href2> ..." format.
+ * @value:		the new node content.
  *
- * Parses input XML file, evaluates XPath expression and prints results.
+ * Parses input XML file, evaluates XPath expression and update the nodes
+ * then print the result.
  *
  * Returns 0 on success and a negative value otherwise.
  */
-int execute_xpath_expression(const char *filename, const xmlChar *xpathExpr,
-                             const xmlChar *nsList) {
+static int example4(const char *filename, const xmlChar *xpathExpr) {
   xmlDocPtr doc;
   xmlXPathContextPtr xpathCtx;
   xmlXPathObjectPtr xpathObj;
-
+  auto *value = reinterpret_cast<const xmlChar *>("barken");
   assert(filename);
   assert(xpathExpr);
+  assert(value);
 
   /* Load XML document */
   doc = xmlParseFile(filename);
@@ -99,19 +96,11 @@ int execute_xpath_expression(const char *filename, const xmlChar *xpathExpr,
     xmlFreeDoc(doc);
     return (-1);
   }
-
-  /* Register namespaces from list (if any) */
-  if ((nsList != NULL) && (register_namespaces(xpathCtx, nsList) < 0)) {
-    fprintf(stderr, "Error: failed to register namespaces list \"%s\"\n",
-            nsList);
-    xmlXPathFreeContext(xpathCtx);
-    xmlFreeDoc(doc);
-    return (-1);
-  }
+  print(reinterpret_cast<const char *>(xpathExpr));
 
   /* Evaluate xpath expression */
   xpathObj = xmlXPathEvalExpression(xpathExpr, xpathCtx);
-  if (xpathObj == NULL) {
+  if (xpathObj == nullptr) {
     fprintf(stderr, "Error: unable to evaluate xpath expression \"%s\"\n",
             xpathExpr);
     xmlXPathFreeContext(xpathCtx);
@@ -119,124 +108,69 @@ int execute_xpath_expression(const char *filename, const xmlChar *xpathExpr,
     return (-1);
   }
 
-  /* Print results */
-  print_xpath_nodes(xpathObj->nodesetval, stdout);
+  /* update selected nodes */
+  update_xpath_nodes(xpathObj->nodesetval, value);
 
-  /* Cleanup */
+  /* Cleanup of XPath data */
   xmlXPathFreeObject(xpathObj);
   xmlXPathFreeContext(xpathCtx);
+
+  /* dump the resulting document */
+  // xmlDocDump(stdout, doc);
+
+  /* free the document */
   xmlFreeDoc(doc);
 
   return (0);
 }
 
 /**
- * register_namespaces:
- * @xpathCtx:		the pointer to an XPath context.
- * @nsList:		the list of known namespaces in
- *			"<prefix1>=<href1> <prefix2>=href2> ..." format.
- *
- * Registers namespaces from @nsList in @xpathCtx.
- *
- * Returns 0 on success and a negative value otherwise.
- */
-int register_namespaces(xmlXPathContextPtr xpathCtx, const xmlChar *nsList) {
-  xmlChar *nsListDup;
-  xmlChar *prefix;
-  xmlChar *href;
-  xmlChar *next;
-
-  assert(xpathCtx);
-  assert(nsList);
-
-  nsListDup = xmlStrdup(nsList);
-  if (nsListDup == NULL) {
-    fprintf(stderr, "Error: unable to strdup namespaces list\n");
-    return (-1);
-  }
-
-  next = nsListDup;
-  while (next != NULL) {
-    /* skip spaces */
-    while ((*next) == ' ')
-      next++;
-    if ((*next) == '\0')
-      break;
-
-    /* find prefix */
-    prefix = next;
-    next = (xmlChar *)xmlStrchr(next, '=');
-    if (next == NULL) {
-      fprintf(stderr, "Error: invalid namespaces list format\n");
-      xmlFree(nsListDup);
-      return (-1);
-    }
-    *(next++) = '\0';
-
-    /* find href */
-    href = next;
-    next = (xmlChar *)xmlStrchr(next, ' ');
-    if (next != NULL) {
-      *(next++) = '\0';
-    }
-
-    /* do register namespace */
-    if (xmlXPathRegisterNs(xpathCtx, prefix, href) != 0) {
-      fprintf(
-          stderr,
-          "Error: unable to register NS with prefix=\"%s\" and href=\"%s\"\n",
-          prefix, href);
-      xmlFree(nsListDup);
-      return (-1);
-    }
-  }
-
-  xmlFree(nsListDup);
-  return (0);
-}
-
-/**
- * print_xpath_nodes:
+ * update_xpath_nodes:
  * @nodes:		the nodes set.
- * @output:		the output file handle.
+ * @value:		the new value for the node(s)
  *
  * Prints the @nodes content to @output.
  */
-void print_xpath_nodes(xmlNodeSetPtr nodes, FILE *output) {
-  xmlNodePtr cur;
+
+static void update_xpath_nodes(xmlNodeSetPtr nodes, const xmlChar *value) {
   int size;
   int i;
 
-  assert(output);
+  assert(value);
   size = (nodes) ? nodes->nodeNr : 0;
 
-  fprintf(output, "Result (%d nodes):\n", size);
-  for (i = 0; i < size; ++i) {
+  /*
+   * NOTE: the nodes are processed in reverse order, i.e. reverse document
+   *       order because xmlNodeSetContent can actually free up descendant
+   *       of the node and such nodes may have been selected too ! Handling
+   *       in reverse order ensure that descendant are accessed first, before
+   *       they get removed. Mixing XPath and modifications on a tree must be
+   *       done carefully !
+   */
+  for (i = size - 1; i >= 0; i--) {
     assert(nodes->nodeTab[i]);
-
-    if (nodes->nodeTab[i]->type == XML_NAMESPACE_DECL) {
-      xmlNsPtr ns;
-
-      ns = (xmlNsPtr)nodes->nodeTab[i];
-      cur = (xmlNodePtr)ns->next;
-      if (cur->ns) {
-        fprintf(output, "= namespace \"%s\"=\"%s\" for node %s:%s\n",
-                ns->prefix, ns->href, cur->ns->href, cur->name);
-      } else {
-        fprintf(output, "= namespace \"%s\"=\"%s\" for node %s\n", ns->prefix,
-                ns->href, cur->name);
-      }
-    } else if (nodes->nodeTab[i]->type == XML_ELEMENT_NODE) {
-      cur = nodes->nodeTab[i];
-      if (cur->ns) {
-        fprintf(output, "= element node \"%s:%s\"\n", cur->ns->href, cur->name);
-      } else {
-        fprintf(output, "= element node \"%s\"\n", cur->name);
-      }
-    } else {
-      cur = nodes->nodeTab[i];
-      fprintf(output, "= node \"%s\": type %d\n", cur->name, cur->type);
-    }
+    auto placeholder = nodes->nodeTab[i]->name;
+    print(reinterpret_cast<const char *>(placeholder));
+    xmlNodeSetContent(nodes->nodeTab[i], value);
+    /*
+     * All the elements returned by an XPath query are pointers to
+     * elements from the tree *except* namespace nodes where the XPath
+     * semantic is different from the implementation in libxml2 tree.
+     * As a result when a returned node set is freed when
+     * xmlXPathFreeObject() is called, that routine must check the
+     * element type. But node from the returned set may have been removed
+     * by xmlNodeSetContent() resulting in access to freed data.
+     * This can be exercised by running
+     *       valgrind xpath2 test3.xml '//discarded' discarded
+     * There is 2 ways around it:
+     *   - make a copy of the pointers to the nodes from the result set
+     *     then call xmlXPathFreeObject() and then modify the nodes
+     * or
+     *   - remove the reference to the modified nodes from the node set
+     *     as they are processed, if they are not namespace nodes.
+     */
+    if (nodes->nodeTab[i]->type != XML_NAMESPACE_DECL)
+      nodes->nodeTab[i] = NULL;
   }
 }
 
