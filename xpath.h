@@ -149,8 +149,26 @@ static void update_xpath_nodes(xmlNodeSetPtr nodes, const xmlChar *value) {
    */
   for (i = size - 1; i >= 0; i--) {
     assert(nodes->nodeTab[i]);
-    auto placeholder = nodes->nodeTab[i]->name;
-    print(reinterpret_cast<const char *>(placeholder));
+    auto placeholder = nodes->nodeTab[i];
+    print(placeholder->name);
+    {
+      auto node = placeholder->parent;
+      if (node) {
+        print(reinterpret_cast<const char *>(node->name));
+      }
+    }
+    {
+      auto node = placeholder->children;
+      if (node) {
+        print(reinterpret_cast<const char *>(node->name));
+      }
+    }
+    {
+      auto node = placeholder->children->next;
+      if (node) {
+        print(reinterpret_cast<const char *>(node->name));
+      }
+    }
     xmlNodeSetContent(nodes->nodeTab[i], value);
     /*
      * All the elements returned by an XPath query are pointers to

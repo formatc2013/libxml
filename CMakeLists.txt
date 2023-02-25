@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 2.8.12)
 project(libxmlexample)
+set(CMAKE_BUILD_TYPE Debug)
 
 add_definitions("-std=c++20")
 

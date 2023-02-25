@@ -1,4 +1,5 @@
 
+#include "../tree.h"
 #include "../xpath.h"
 #include <fstream>
 #include <gtest/gtest.h>
@@ -13,5 +14,11 @@ TEST(testMath, myCubeTest) {
   main_xpath("xml/example.xml", line.c_str());
   auto f = 1;
   auto ff = 11;
+  EXPECT_EQ(1000, 1000);
+}
+TEST(testMath, myCubeTest1) {
+
+  main_tree_dom("xml/example.xml");
+
   EXPECT_EQ(1000, 1000);
 }

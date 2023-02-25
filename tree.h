@@ -58,7 +58,7 @@ static void PrintElementNames(xmlNode *a_node) {
  */
 struct reader_guard {
 
-  reader_guard(auto path) {
+  explicit reader_guard(auto path) {
     LIBXML_TEST_VERSION
     doc = xmlReadFile(path, nullptr, 0);
     if (doc == nullptr) {
