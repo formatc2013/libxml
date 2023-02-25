@@ -9,10 +9,10 @@
  * author: Dodji Seketeli
  * copy: see Copyright for the status of this software.
  */
+#include <cstdio>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
-#include <stdio.h>
-
+#include <stack>
 #ifdef LIBXML_TREE_ENABLED
 
 /*
@@ -28,14 +28,25 @@
  * that are siblings or children of a given xml node.
  */
 static void PrintElementNames(xmlNode *a_node) {
-  xmlNode *cur_node = NULL;
+  xmlNode *cur_node = a_node;
+  std::stack<xmlNode *> node_stack; // use a stack to keep track of nodes
 
-  for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
-    if (cur_node->type == XML_ELEMENT_NODE) {
-      printf("node type: Element, name: %s\n", cur_node->name);
+  while (!node_stack.empty() || cur_node != nullptr) {
+    if (cur_node != nullptr) {
+      if (cur_node->type == XML_ELEMENT_NODE) {
+        printf("node type: Element, name: %s\n", cur_node->name);
+      }
+
+      // push the current node's children onto the stack
+      if (cur_node->children != nullptr) {
+        node_stack.push(cur_node->children);
+      }
+
+      cur_node = cur_node->next;
+    } else {
+      cur_node = node_stack.top(); // get the next node from the stack
+      node_stack.pop();
     }
-
-    PrintElementNames(cur_node->children);
   }
 }
 
@@ -44,12 +55,13 @@ static void PrintElementNames(xmlNode *a_node) {
  * walk down the DOM, and print the name of the
  * xml elements nodes.
  */
-int main(int argc, char **argv) {
-  xmlDoc *doc = NULL;
-  xmlNode *root_element = NULL;
+auto main(int argc, char **argv) -> int {
+  xmlDoc *doc = nullptr;
+  xmlNode *root_element = nullptr;
 
-  if (argc != 2)
+  if (argc != 2) {
     return (1);
+  }
 
   /*
    * this initialize the library and check potential ABI mismatches
@@ -59,7 +71,7 @@ int main(int argc, char **argv) {
   LIBXML_TEST_VERSION
 
   /*parse the file and get the DOM */
-  doc = xmlReadFile(argv[1], NULL, 0);
+  doc = xmlReadFile(argv[1], nullptr, 0);
 
   if (doc == NULL) {
     printf("error: could not parse file %s\n", argv[1]);

@@ -18,7 +18,7 @@
 # Disabled:
 #  -google-readability-namespace-comments the *_CLIENT_NS is a macro, and
 #   clang-tidy fails to match it against the initial value.
-Checks: >
+Checks:
   -*,
   bugprone-*,
   google-*,
@@ -35,6 +35,7 @@ Checks: >
   -readability-braces-around-statements,
   -readability-magic-numbers
 
+WarningsAsErrors: "-*"
 
 CheckOptions:
   - { key: readability-identifier-naming.NamespaceCase,          value: lower_case }
